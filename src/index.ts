@@ -1,20 +1,10 @@
-import { sleep } from './utils';
+import { Devtool, devtool as internalDevtool } from './devtool';
+export * from './types';
+import { Actor } from './Actor';
+import { IConfig, IEvents, IState } from './types';
 
-export * from './utils';
+export const devtool = internalDevtool.setDevtool(new Devtool());
 
-export class HelloWorld {
-  readonly foo: string;
-
-  constructor(foo: string) {
-    this.foo = foo;
-  }
-
-  getMessage() {
-    return `Hello, this is ${this.foo}`;
-  }
-}
-
-export async function doSomethingAsync() {
-  await sleep(250);
-  return 'hello';
+export function actor<S extends IState, E extends IEvents>(config: IConfig<S, E>) {
+  return new Actor(config);
 }
