@@ -8,7 +8,10 @@ export class Actor<S extends IState, E extends IEvents> {
   private _state: S['state'];
   private _mode: 'started' | 'stopped' = 'stopped';
   private readonly _devtoolId?: number;
-  private readonly _devtoolParentId?: number;
+  private readonly _devtoolParent?: {
+    id: number;
+    state: string;
+  };
   private readonly _config: IConfig<S, E>;
   private readonly _subscriptions: {
     [state: string]: ISubscription<Actor<S, E>>[];
@@ -142,7 +145,7 @@ export class Actor<S extends IState, E extends IEvents> {
 
   private createEventHandler(event: string, cb: (payload: any) => any) {
     return (payload: any) => {
-      if (!this._config.events[this._state][event]) {
+      if (!this._config.events[this._state][event] || this._mode === 'stopped') {
         return;
       }
 
@@ -163,6 +166,23 @@ export class Actor<S extends IState, E extends IEvents> {
       this.runSubscribers();
     };
   }
+  private runSubscribers() {
+    if (this._subscriptions['']) {
+      this._subscriptions[''].forEach((subscription) => {
+        subscription.disposer = subscription.handler(this);
+      });
+    }
+
+    if (this._subscriptions[this._state]) {
+      this._subscriptions[this._state].forEach((subscription) => {
+        subscription.disposer = subscription.handler(this);
+      });
+    }
+
+    if (process.env.NODE_ENV !== 'production') {
+      devtool.setActor(null);
+    }
+  }
   private runDisposers() {
     if (this._subscriptions[this._state]) {
       this._subscriptions[this._state].forEach((subscription) => {
@@ -180,23 +200,6 @@ export class Actor<S extends IState, E extends IEvents> {
           subscription.disposer = undefined;
         }
       });
-    }
-  }
-  private runSubscribers() {
-    if (this._subscriptions['']) {
-      this._subscriptions[''].forEach((subscription) => {
-        subscription.disposer = subscription.handler(this);
-      });
-    }
-
-    if (this._subscriptions[this._state]) {
-      this._subscriptions[this._state].forEach((subscription) => {
-        subscription.disposer = subscription.handler(this);
-      });
-    }
-
-    if (process.env.NODE_ENV !== 'production') {
-      devtool.setActor(null);
     }
   }
 }

@@ -1,5 +1,5 @@
-import { Devtool, devtool } from '../devtool';
 import { actor } from '..';
+import { Devtool, devtool } from '../devtool';
 
 describe('Devtools', () => {
   beforeEach(() => {
@@ -22,7 +22,7 @@ describe('Devtools', () => {
       events: {},
     });
     instance.start();
-    expect(devtool.getActors().length).toBe(1);
+    expect(devtool.getActors().size).toBe(1);
   });
   test('should keep reference to currently running actor', () => {
     expect.assertions(1);
@@ -70,7 +70,10 @@ describe('Devtools', () => {
       } else if (count === 2) {
         expect(actors.size).toBe(2);
         // @ts-ignore
-        expect(actor._devtoolParentId).toBe(0);
+        expect(actor._devtoolParent).toEqual({
+          id: 0,
+          state: 'foo',
+        });
       } else {
         expect(history).toEqual([
           {

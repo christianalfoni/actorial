@@ -15,7 +15,14 @@ export class Devtool {
     // @ts-ignore
     actor._devtoolId = this.id++;
     // @ts-ignore
-    actor._devtoolParentId = this.currentActor ? this.currentActor._devtoolId! : undefined;
+    actor._devtoolParent = this.currentActor
+      ? {
+          // @ts-ignore
+          id: this.currentActor._devtoolId,
+          // @ts-ignore
+          state: this.currentActor._state,
+        }
+      : undefined;
     // @ts-ignore
     this.actors.set(actor._devtoolId, actor);
     actor.subscribe((instance) => {
@@ -37,7 +44,7 @@ export class Devtool {
     return this.currentActor;
   }
   getActors() {
-    return Array.from(this.actors);
+    return this.actors;
   }
   subscribe(cb: (actor: Actor<any, any>, actors: Map<string, Actor<any, any>>, history: THistory) => void) {
     this.subscriptions.push(cb);

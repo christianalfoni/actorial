@@ -9,6 +9,7 @@
   "module": "es/index.js",
   "types": "lib/index.d.ts",
   "scripts": {
+    "clear": "jest --clearCache",
     "build": "npm run build:lib & npm run build:es",
     "build:lib": "tsc --outDir lib --module commonjs",
     "build:es": "tsc --outDir es --module es2015",

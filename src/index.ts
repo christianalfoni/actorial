@@ -1,7 +1,8 @@
-import { Devtool, devtool as internalDevtool } from './devtool';
-export * from './types';
 import { Actor } from './Actor';
+import { Devtool, devtool as internalDevtool } from './devtool';
 import { IConfig, IEvents, IState } from './types';
+
+export * from './types';
 
 export const devtool = internalDevtool.setDevtool(new Devtool());
 

@@ -139,7 +139,7 @@ describe('Actorial', () => {
         },
       },
     });
-
+    instance.start();
     instance.dispatch.changed('bar2');
     expect(instance.data.foo).toBe('bar2');
   });
@@ -174,7 +174,7 @@ describe('Actorial', () => {
         bar: {},
       },
     });
-
+    instance.start();
     instance.dispatch.changed('bar2');
     expect(instance.matches('bar')).toBe(true);
     expect(instance.matches('bar') && instance.data.foo).toBe('bar2');
@@ -210,7 +210,7 @@ describe('Actorial', () => {
         bar: {},
       },
     });
-
+    instance.start();
     instance.dispatch.changed();
     expect(instance.matches('bar') && instance.data.foo).toBe('bar!');
     instance.dispatch.changed();
@@ -245,16 +245,19 @@ describe('Actorial', () => {
       },
     });
 
-    expect.assertions(2);
+    expect.assertions(3);
     let count = 0;
     instance.subscribe((actor) => {
       count++;
       if (count === 1) {
+        expect(actor.matches('foo')).toBe(true);
+      } else if (count === 2) {
         expect(actor.matches('bar')).toBe(true);
       } else {
         expect(actor.matches('foo')).toBe(true);
       }
     });
+    instance.start();
     instance.dispatch.toBar();
     instance.dispatch.toFoo();
   });
@@ -295,6 +298,7 @@ describe('Actorial', () => {
     instance.on('bar', (actor) => {
       expect(actor.matches('bar')).toBe(true);
     });
+    instance.start();
     instance.dispatch.toBar();
     instance.dispatch.toFoo();
   });
@@ -327,17 +331,24 @@ describe('Actorial', () => {
       },
     });
 
-    expect.assertions(2);
+    expect.assertions(3);
+    let subscriptionCount = 0;
     instance.subscribe((actor) => {
       return () => {
-        expect(actor.matches('foo')).toBe(true);
+        subscriptionCount++;
+        if (subscriptionCount === 1) {
+          expect(actor.matches('foo')).toBe(true);
+        } else {
+          expect(actor.matches('bar')).toBe(true);
+        }
       };
     });
     instance.on('bar', (actor) => {
       return () => {
-        expect(actor.matches('foo')).toBe(true);
+        expect(actor.matches('bar')).toBe(true);
       };
     });
+    instance.start();
     instance.dispatch.toBar();
     instance.dispatch.toFoo();
   });
@@ -370,11 +381,17 @@ describe('Actorial', () => {
       },
     });
 
-    expect.assertions(1);
+    expect.assertions(2);
+    let count = 0;
     const dispose = instance.subscribe((actor) => {
-      expect(actor.matches('bar')).toBe(true);
+      count++;
+      if (count === 1) {
+        expect(actor.matches('foo')).toBe(true);
+      } else {
+        expect(actor.matches('bar')).toBe(true);
+      }
     });
-
+    instance.start();
     instance.dispatch.toBar();
     dispose();
     instance.dispatch.toFoo();
