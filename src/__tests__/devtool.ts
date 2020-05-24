@@ -32,20 +32,26 @@ describe('Devtools', () => {
       events: {},
     });
     instance.on('foo', () => {
-      expect(devtool.getCurrentActor()).toBe(instance);
+      expect(devtool.getCurrentActorIds()).toEqual([0]);
     });
     instance.start();
   });
   test('should trigger event on actor updates', () => {
-    expect.assertions(2);
+    expect.assertions(5);
     let count = 0;
-    devtool.subscribe((actor) => {
-      count++;
-      if (count === 1) {
-        expect(actor.matches('foo')).toBe(true);
-      } else {
-        expect(actor.matches('bar')).toBe(true);
-      }
+    devtool.subscribe((_, actors) => {
+      [
+        // Added
+        () => expect(actors.get(0)!.state === 'foo').toBe(true),
+        // Set current actor
+        () => expect(actors.get(0)!.state === 'foo').toBe(true),
+        // Update actor mode
+        () => expect(actors.get(0)!.state === 'foo').toBe(true),
+        // Dispatch
+        () => expect(actors.get(0)!.state === 'foo').toBe(true),
+        // Update event
+        () => expect(actors.get(0)!.state === 'bar').toBe(true),
+      ][count++]();
     });
     const instance = actor({
       state: 'foo',
@@ -61,36 +67,25 @@ describe('Devtools', () => {
     instance.dispatch.update(null);
   });
   test('should keep history of state and data changes', () => {
-    expect.assertions(4);
+    expect.assertions(1);
     let count = 0;
-    devtool.subscribe((actor, actors, history) => {
+    devtool.subscribe((_, __, history) => {
       count++;
-      if (count === 1) {
-        expect(actors.size).toBe(1);
-      } else if (count === 2) {
-        expect(actors.size).toBe(2);
-        // @ts-ignore
-        expect(actor._devtoolParent).toEqual({
-          id: 0,
-          state: 'foo',
-        });
-      } else {
+      if (count === 9) {
         expect(history).toEqual([
+          { type: 'add_actor', data: { id: 0, state: 'foo', data: {}, mode: 'stopped' } },
+          { type: 'add_actor', data: { id: 1, state: 'baz', data: {}, mode: 'stopped' } },
+          { type: 'subscription', data: { id: 0, state: 'foo', ref: 1, subscriptionId: 0 } },
+          { type: 'current_actor', data: [0] },
+          { type: 'current_actor', data: [0, 1] },
+          { type: 'update_actor', data: { id: 1, state: 'baz', data: {}, mode: 'started' } },
+          { type: 'current_actor', data: [0] },
+          { type: 'update_actor', data: { id: 0, state: 'foo', data: {}, mode: 'started' } },
           {
-            id: 0,
-            state: 'foo',
-            data: {},
+            type: 'dispatch',
+            data: { id: 0, subscriptionId: undefined, state: 'foo', event: 'update', payload: null },
           },
-          {
-            id: 1,
-            state: 'baz',
-            data: {},
-          },
-          {
-            id: 0,
-            state: 'bar',
-            data: {},
-          },
+          { type: 'update_actor', data: { id: 1, state: 'baz', data: {}, mode: 'stopped' } },
         ]);
       }
     });

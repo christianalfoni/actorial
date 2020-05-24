@@ -34,8 +34,46 @@ export interface ISubscription<T> {
   handler: TSubscriptionHandler<T>;
 }
 
-export type THistory = {
-  id: number;
-  state: string;
-  data: any;
-}[];
+export type THistory = (
+  | {
+      type: 'add_actor';
+      data: {
+        id: number;
+        state: string;
+        data: any;
+        mode: string;
+      };
+    }
+  | {
+      type: 'update_actor';
+      data: {
+        id: number;
+        state: string;
+        data: any;
+        mode: string;
+      };
+    }
+  | {
+      type: 'current_actor';
+      data: number;
+    }
+  | {
+      type: 'dispatch';
+      data: {
+        id: number;
+        subscriptionId?: number;
+        state: string | number;
+        event: string;
+        payload: any;
+      };
+    }
+  | {
+      type: 'subscription';
+      data: {
+        id: number;
+        subscriptionId: number;
+        state: string | number;
+        ref: string | number;
+      };
+    }
+)[];

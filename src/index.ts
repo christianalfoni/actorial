@@ -6,6 +6,6 @@ export * from './types';
 
 export const devtool = internalDevtool.setDevtool(new Devtool());
 
-export function actor<S extends IState, E extends IEvents>(config: IConfig<S, E>) {
-  return new Actor(config);
+export function actor<S extends IState, E extends IEvents>(config: IConfig<S, E>): S & Actor<S, E> {
+  return new Actor(config) as any;
 }

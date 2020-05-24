@@ -35,7 +35,7 @@ describe('Actorial', () => {
         bar: {},
       },
     });
-    expect(instance.matches('foo')).toBe(true);
+    expect(instance.state === 'foo').toBe(true);
   });
   test('should instantiate actors with data', () => {
     interface States {
@@ -54,7 +54,7 @@ describe('Actorial', () => {
         foo: {},
       },
     });
-    expect(instance.matches('foo')).toBe(true);
+    expect(instance.state === 'foo').toBe(true);
     expect(instance.data.a).toBe('a');
   });
   test('should instantiate actors with events', () => {
@@ -88,8 +88,8 @@ describe('Actorial', () => {
         bar: {},
       },
     });
-    expect(instance.matches('foo')).toBe(true);
-    expect(instance.matches('foo') && instance.data.foo).toBe('bar');
+    expect(instance.state === 'foo').toBe(true);
+    expect(instance.state === 'foo' && instance.data.foo).toBe('bar');
   });
   test('should instantiate actors with a dispatcher', () => {
     type States = {
@@ -176,8 +176,8 @@ describe('Actorial', () => {
     });
     instance.start();
     instance.dispatch.changed('bar2');
-    expect(instance.matches('bar')).toBe(true);
-    expect(instance.matches('bar') && instance.data.foo).toBe('bar2');
+    expect(instance.state === 'bar').toBe(true);
+    expect(instance.state === 'bar' && instance.data.foo).toBe('bar2');
   });
   test('should ignore invalid event', () => {
     type States =
@@ -212,9 +212,9 @@ describe('Actorial', () => {
     });
     instance.start();
     instance.dispatch.changed();
-    expect(instance.matches('bar') && instance.data.foo).toBe('bar!');
+    expect(instance.state === 'bar' && instance.data.foo).toBe('bar!');
     instance.dispatch.changed();
-    expect(instance.matches('bar') && instance.data.foo).toBe('bar!');
+    expect(instance.state === 'bar' && instance.data.foo).toBe('bar!');
   });
   test('should trigger subscriptions on state change', () => {
     type States =
@@ -250,11 +250,11 @@ describe('Actorial', () => {
     instance.subscribe((actor) => {
       count++;
       if (count === 1) {
-        expect(actor.matches('foo')).toBe(true);
+        expect(actor.state === 'foo').toBe(true);
       } else if (count === 2) {
-        expect(actor.matches('bar')).toBe(true);
+        expect(actor.state === 'bar').toBe(true);
       } else {
-        expect(actor.matches('foo')).toBe(true);
+        expect(actor.state === 'foo').toBe(true);
       }
     });
     instance.start();
@@ -293,10 +293,10 @@ describe('Actorial', () => {
     expect.assertions(3);
     // Triggers when state matches
     instance.on('foo', (actor) => {
-      expect(actor.matches('foo')).toBe(true);
+      expect(actor.state === 'foo').toBe(true);
     });
     instance.on('bar', (actor) => {
-      expect(actor.matches('bar')).toBe(true);
+      expect(actor.state === 'bar').toBe(true);
     });
     instance.start();
     instance.dispatch.toBar();
@@ -337,15 +337,15 @@ describe('Actorial', () => {
       return () => {
         subscriptionCount++;
         if (subscriptionCount === 1) {
-          expect(actor.matches('foo')).toBe(true);
+          expect(actor.state === 'foo').toBe(true);
         } else {
-          expect(actor.matches('bar')).toBe(true);
+          expect(actor.state === 'bar').toBe(true);
         }
       };
     });
     instance.on('bar', (actor) => {
       return () => {
-        expect(actor.matches('bar')).toBe(true);
+        expect(actor.state === 'bar').toBe(true);
       };
     });
     instance.start();
@@ -386,9 +386,9 @@ describe('Actorial', () => {
     const dispose = instance.subscribe((actor) => {
       count++;
       if (count === 1) {
-        expect(actor.matches('foo')).toBe(true);
+        expect(actor.state === 'foo').toBe(true);
       } else {
-        expect(actor.matches('bar')).toBe(true);
+        expect(actor.state === 'bar').toBe(true);
       }
     });
     instance.start();
