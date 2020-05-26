@@ -1,17 +1,12 @@
 import { Actor } from './Actor';
-import { THistory, TDispatch, TSubscriptionHandler } from './types';
+import { THistory, TDispatch, TSubscriptionHandler, THistoryRecord } from './types';
 
 export class Devtool {
   private id = 0;
   private subscriptionId = 0;
   private currentActorIds: number[] = [];
-  private readonly actors = new Map<number, Actor<any, any>>();
-  private readonly subscriptions: ((
-    currentActorIds: number[],
-    actors: Map<number, Actor<any, any>>,
-    history: THistory,
-  ) => void)[] = [];
-  private history: THistory = [];
+  private subscriber: ((event: THistoryRecord) => void) | null = null;
+  private buffer: THistory = [];
   addActor(actor: Actor<any, any>) {
     // @ts-ignore
     actor._devtoolId = this.id++;
@@ -24,14 +19,7 @@ export class Devtool {
           state: this.actors.get(this.currentActorIds[this.currentActorIds.length - 1]).state,
         }
       : undefined;
-    // @ts-ignore
-    this.actors.set(actor._devtoolId, actor);
-
-    actor.subscribe((instance) => {
-      this.subscriptions.forEach((handler) => handler(this.currentActorIds, this.actors, this.history));
-    });
-
-    this.history.push({
+    this.emitUpdate({
       type: 'add_actor',
       data: {
         // @ts-ignore
@@ -40,11 +28,18 @@ export class Devtool {
         data: actor.data,
         // @ts-ignore
         mode: actor._mode,
+        // @ts-ignore
+        events: Object.keys(actor._config.events).reduce<{ [state: string]: string[] }>((aggr, state) => {
+          // @ts-ignore
+          aggr[state] = Object.keys(actor._config.events[state]);
+
+          return aggr;
+        }, {}),
       },
     });
   }
   updateActor(actor: Actor<any, any>) {
-    this.history.push({
+    this.emitUpdate({
       type: 'update_actor',
       data: {
         // @ts-ignore
@@ -55,7 +50,6 @@ export class Devtool {
         mode: actor._mode,
       },
     });
-    this.subscriptions.forEach((handler) => handler(this.currentActorIds, this.actors, this.history));
   }
   setCurrentActor(actor: Actor<any, any>) {
     // Related to starting an actor we might already be running when running
@@ -73,20 +67,16 @@ export class Devtool {
   getCurrentActorIds() {
     return this.currentActorIds;
   }
-  getActors() {
-    return this.actors;
-  }
   addDispatch(data: { id: number; subscriptionId?: number; state: string | number; event: string; payload: any }) {
-    this.history.push({
+    this.emitUpdate({
       type: 'dispatch',
       data,
     });
-    this.subscriptions.forEach((handler) => handler(this.currentActorIds, this.actors, this.history));
   }
   addSubscription(data: { id: number; state: string | number; ref: string | number }) {
     const subscriptionId = this.subscriptionId++;
 
-    this.history.push({
+    this.emitUpdate({
       type: 'subscription',
       data: {
         ...data,
@@ -96,8 +86,18 @@ export class Devtool {
 
     return subscriptionId;
   }
-  subscribe(cb: (currentActorIds: number[], actors: Map<number, Actor<any, any>>, history: THistory) => void) {
-    this.subscriptions.push(cb);
+  subscribe(cb: (event: THistoryRecord) => void) {
+    this.subscriber = cb;
+  }
+  getEventsBuffer() {
+    return this.buffer;
+  }
+  private emitUpdate(event: THistoryRecord) {
+    if (this.subscriber) {
+      this.subscriber(event);
+    } else {
+      this.buffer.push(event);
+    }
   }
 }
 
@@ -121,10 +121,7 @@ export const devtool = {
   getCurrentActorIds() {
     return currentDevtool.getCurrentActorIds();
   },
-  getActors() {
-    return currentDevtool.getActors();
-  },
-  subscribe(cb: (currentActorsIds: number[], actors: Map<number, Actor<any, any>>, history: THistory) => void) {
+  subscribe(cb: (event: THistoryRecord) => void) {
     return currentDevtool.subscribe(cb);
   },
   createWrappedDispatcher(subscriptionId?: number) {
@@ -160,5 +157,8 @@ export const devtool = {
       state,
       ref: subscriber.name,
     });
+  },
+  getEventsBuffer() {
+    return currentDevtool.getEventsBuffer();
   },
 };

@@ -34,7 +34,7 @@ export interface ISubscription<T> {
   handler: TSubscriptionHandler<T>;
 }
 
-export type THistory = (
+export type THistoryRecord =
   | {
       type: 'add_actor';
       data: {
@@ -42,6 +42,9 @@ export type THistory = (
         state: string;
         data: any;
         mode: string;
+        events: {
+          [state: string]: string[];
+        };
       };
     }
   | {
@@ -75,5 +78,6 @@ export type THistory = (
         state: string | number;
         ref: string | number;
       };
-    }
-)[];
+    };
+
+export type THistory = THistoryRecord[];
