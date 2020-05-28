@@ -1,5 +1,14 @@
 import { devtool } from './devtool';
-import { IConfig, IEvents, IState, ISubscription, TDispatch, TSubscriptionHandler } from './types';
+import {
+  IConfig,
+  IEvents,
+  IState,
+  ISubscription,
+  TDispatch,
+  TSubscriptionHandler,
+  TStateSubscriptionHandler,
+} from './types';
+import { spawn } from './spawn';
 
 export class Actor<S extends IState, E extends IEvents> {
   dispatch: TDispatch<E>;
@@ -7,14 +16,12 @@ export class Actor<S extends IState, E extends IEvents> {
   state: S['state'];
 
   private _mode: 'started' | 'stopped' | 'starting' = 'stopped';
-  private readonly _devtoolId?: number;
-  private readonly _devtoolParent?: {
-    id: number;
-    state: string;
-  };
+  private readonly _devtoolId?: string;
+  private readonly _devtoolSubscriptionId?: string;
   private readonly _config: IConfig<S, E>;
-  private readonly _subscriptions: {
-    [state: string]: ISubscription<Actor<S, E>>[];
+  private readonly _subscriptions: ISubscription<TSubscriptionHandler<S, E>>[] = [];
+  private readonly _stateSubscriptions: {
+    [state: string]: ISubscription<TStateSubscriptionHandler<S, E>>[];
   } = {};
 
   constructor(config: IConfig<S, E>) {
@@ -28,6 +35,10 @@ export class Actor<S extends IState, E extends IEvents> {
       devtool.addActor(this);
       this.dispatch = this.createDispatcher(config.events, devtool.createWrappedDispatcher());
     }
+
+    Object.keys(config.on || {}).forEach((state) => {
+      this.on(state, (config.on as any)[state as S['state']]);
+    });
   }
 
   /**
@@ -35,9 +46,6 @@ export class Actor<S extends IState, E extends IEvents> {
    */
   start() {
     if (this._mode === 'stopped') {
-      if (process.env.NODE_ENV !== 'production') {
-        devtool.setCurrentActor(this);
-      }
       this._mode = 'starting';
       this.state = this._config.state;
       this.data = this._config.data;
@@ -68,63 +76,28 @@ export class Actor<S extends IState, E extends IEvents> {
    * @param state
    * @param cb
    */
-  on<C extends S['state']>(state: C, arg: TSubscriptionHandler<Actor<S, E>> | Actor<any, any>): void {
-    if (!this._subscriptions[state]) {
-      this._subscriptions[state] = [];
+  on(state: S['state'], handler: TStateSubscriptionHandler<S, E>): void {
+    if (!this._stateSubscriptions[state]) {
+      this._stateSubscriptions[state] = [];
     }
 
-    let cb: TSubscriptionHandler<Actor<S, E>>;
+    let cb: TStateSubscriptionHandler<S, E> = handler;
 
-    if (process.env.NODE_ENV === 'production') {
-      cb =
-        arg instanceof Actor
-          ? () => {
-              arg.start();
-              return () => {
-                arg.stop();
-              };
-            }
-          : arg;
-    } else {
-      const subscriptionId = devtool.addSubscription(this._devtoolId!, state, arg);
-      const wrappedDispatcher = this.createDispatcher(
-        this._config.events,
-        devtool.createWrappedDispatcher(subscriptionId),
-      );
-
-      cb =
-        arg instanceof Actor
-          ? () => {
-              devtool.setCurrentActor(this);
-              arg.start();
-              devtool.popCurrentActor();
-              return () => {
-                arg.stop();
-              };
-            }
-          : () => {
-              devtool.setCurrentActor(this);
-              const result = arg(
-                new Proxy(this, {
-                  get(target, prop) {
-                    if (prop === 'dispatch') {
-                      return wrappedDispatcher;
-                    }
-
-                    return Reflect.get(target, prop);
-                  },
-                }),
-              );
-              devtool.popCurrentActor();
-              return result;
-            };
+    if (process.env.NODE_ENV !== 'production') {
+      const subscriptionId = devtool.addSubscription(this._devtoolId!, state, handler as any);
+      const wrappedDispatcher = this.createDispatcher(this._config.events, devtool.createWrappedDispatcher());
+      cb = (data) => {
+        devtool.setCurrentSubscription(subscriptionId);
+        const result = handler(data, wrappedDispatcher, spawn);
+        return result;
+      };
     }
 
-    const subscription: ISubscription<Actor<S, E>> = {
+    const subscription: ISubscription<TStateSubscriptionHandler<S, E>> = {
       disposer: undefined,
       handler: cb,
     };
-    this._subscriptions[state].push(subscription);
+    this._stateSubscriptions[state].push(subscription);
   }
 
   /**
@@ -132,28 +105,25 @@ export class Actor<S extends IState, E extends IEvents> {
    * Return a function to trigger whenever a certain state is transitioned away from.
    * @param cb
    */
-  subscribe(cb: TSubscriptionHandler<Actor<S, E>>): () => void {
-    if (!this._subscriptions['']) {
-      this._subscriptions[''] = [];
-    }
-    const subscription: ISubscription<Actor<S, E>> = {
+  subscribe(cb: TSubscriptionHandler<S, E>): () => void {
+    const subscription: ISubscription<TSubscriptionHandler<S, E>> = {
       disposer: undefined,
       handler: cb,
     };
-    this._subscriptions[''].push(subscription);
+    this._subscriptions.push(subscription);
 
     return () => {
       if (subscription.disposer) {
         subscription.disposer();
       }
-      this._subscriptions[''].splice(this._subscriptions[''].indexOf(subscription), 1);
+      this._subscriptions.splice(this._subscriptions.indexOf(subscription), 1);
     };
   }
 
   private createDispatcher(
     events: any,
     devtoolWrapper?: (
-      id: number,
+      id: string,
       state: string,
       event: string,
       dispatch: (payload: any) => void,
@@ -176,10 +146,6 @@ export class Actor<S extends IState, E extends IEvents> {
     return (payload: any) => {
       if (!this._config.events[this.state][event] || this._mode === 'stopped') {
         return;
-      }
-
-      if (process.env.NODE_ENV !== 'production') {
-        devtool.setCurrentActor(this);
       }
 
       const result = cb(this.data)(payload);
@@ -208,21 +174,19 @@ export class Actor<S extends IState, E extends IEvents> {
     };
   }
   private runSubscribers() {
-    if (this._subscriptions['']) {
-      this._subscriptions[''].forEach((subscription) => {
-        subscription.disposer = subscription.handler(this);
+    if (this._stateSubscriptions[this.state]) {
+      this._stateSubscriptions[this.state].forEach((subscription) => {
+        subscription.disposer = subscription.handler(this.data, this.dispatch, spawn);
       });
     }
-
-    if (this._subscriptions[this.state]) {
-      this._subscriptions[this.state].forEach((subscription) => {
-        subscription.disposer = subscription.handler(this);
-      });
-    }
+    this._subscriptions.forEach((subscription) => {
+      subscription.disposer = subscription.handler(this.state, this.data, this.dispatch);
+    });
   }
   private runDisposers() {
-    if (this._subscriptions[this.state]) {
-      this._subscriptions[this.state].forEach((subscription) => {
+    if (this._stateSubscriptions[this.state]) {
+      devtool.popCurrentSubscription();
+      this._stateSubscriptions[this.state].forEach((subscription) => {
         if (subscription.disposer) {
           subscription.disposer();
           subscription.disposer = undefined;
@@ -230,13 +194,11 @@ export class Actor<S extends IState, E extends IEvents> {
       });
     }
 
-    if (this._subscriptions['']) {
-      this._subscriptions[''].forEach((subscription) => {
-        if (subscription.disposer) {
-          subscription.disposer();
-          subscription.disposer = undefined;
-        }
-      });
-    }
+    this._subscriptions.forEach((subscription) => {
+      if (subscription.disposer) {
+        subscription.disposer();
+        subscription.disposer = undefined;
+      }
+    });
   }
 }

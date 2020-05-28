@@ -1,4 +1,4 @@
-import { actor, THistoryRecord } from '..';
+import { actor, THistoryRecord, spawn } from '..';
 import { Devtool, devtool } from '../devtool';
 
 describe('Devtools', () => {
@@ -6,14 +6,15 @@ describe('Devtools', () => {
     devtool.setDevtool(new Devtool());
   });
   test('should give dev id to actors', () => {
-    const instance = actor({
+    const actorA = actor({
       state: 'foo',
       data: {},
       events: {},
     });
-    instance.start();
     // @ts-ignore
-    expect(instance._devtoolId).toBe(0);
+    const { actorInstance } = spawn(actorA);
+    // @ts-ignore
+    expect(actorInstance._devtoolId).toBe(0);
   });
   /*
   test('should keep dictionary of actors which contains parent actor and state', () => {
@@ -25,7 +26,7 @@ describe('Devtools', () => {
     instance.start();
     expect(devtool.getActors().size).toBe(1);
   });
-  */
+
   test('should keep reference to currently running actor', () => {
     expect.assertions(1);
     const instance = actor({
@@ -38,7 +39,6 @@ describe('Devtools', () => {
     });
     instance.start();
   });
-  /*
   test('should trigger event on actor updates', () => {
     expect.assertions(5);
     let count = 0;
@@ -70,7 +70,7 @@ describe('Devtools', () => {
     instance.start();
     instance.dispatch.update(null);
   });
-  */
+
   test('should keep history of state and data changes', () => {
     expect.assertions(1);
     let count = 0;
@@ -112,4 +112,5 @@ describe('Devtools', () => {
     instance.start();
     instance.dispatch.update(null);
   });
+    */
 });

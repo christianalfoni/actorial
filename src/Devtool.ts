@@ -1,29 +1,27 @@
 import { Actor } from './Actor';
-import { THistory, TDispatch, TSubscriptionHandler, THistoryRecord } from './types';
+import { THistory, TDispatch, TSubscriptionHandler, THistoryRecord, ISpawn } from './types';
+import { spawn } from './spawn';
 
 export class Devtool {
   private id = 0;
   private subscriptionId = 0;
-  private currentActorIds: number[] = [];
+  private currentSubscriptions: string[] = [];
   private subscriber: ((event: THistoryRecord) => void) | null = null;
   private buffer: THistory = [];
   addActor(actor: Actor<any, any>) {
     // @ts-ignore
-    actor._devtoolId = this.id++;
+    actor._devtoolId = String(this.id++);
     // @ts-ignore
-    actor._devtoolParent = this.currentActorIds.length
-      ? {
-          // @ts-ignore
-          id: this.actors.get(this.currentActorIds[this.currentActorIds.length - 1])._devtoolId,
-          // @ts-ignore
-          state: this.actors.get(this.currentActorIds[this.currentActorIds.length - 1]).state,
-        }
+    actor._devtoolSubscriptionId = this.currentSubscriptions.length
+      ? this.currentSubscriptions[this.currentSubscriptions.length - 1]
       : undefined;
     this.emitUpdate({
       type: 'add_actor',
       data: {
         // @ts-ignore
         id: actor._devtoolId,
+        // @ts-ignore
+        subscriptionId: actor._devtoolSubscriptionId,
         state: actor.state,
         data: actor.data,
         // @ts-ignore
@@ -51,30 +49,32 @@ export class Devtool {
       },
     });
   }
-  setCurrentActor(actor: Actor<any, any>) {
+  setCurrentSubscription(id: string) {
     // Related to starting an actor we might already be running when running
     // "on" handlers
     // @ts-ignore
-    if (this.currentActorIds[this.currentActorIds.length - 1] === actor._devtoolId!) {
+    if (this.currentSubscriptions[this.currentSubscriptions.length - 1] === id) {
       return;
     }
-    // @ts-ignore
-    this.currentActorIds.push(actor._devtoolId);
+    this.currentSubscriptions.push(id);
   }
-  popCurrentActor() {
-    this.currentActorIds.pop();
+  popCurrentSubscription() {
+    this.currentSubscriptions.pop();
   }
-  getCurrentActorIds() {
-    return this.currentActorIds;
+  getCurrentSubscriptions() {
+    return this.currentSubscriptions;
   }
-  addDispatch(data: { id: number; subscriptionId?: number; state: string | number; event: string; payload: any }) {
+  addDispatch(data: { id: string; state: string | number; event: string; payload: any }) {
     this.emitUpdate({
       type: 'dispatch',
-      data,
+      data: {
+        ...data,
+        subscriptionIds: this.currentSubscriptions.slice(),
+      },
     });
   }
-  addSubscription(data: { id: number; state: string | number; ref: string | number }) {
-    const subscriptionId = this.subscriptionId++;
+  addSubscription(data: { id: string; state: string | number; name: string }) {
+    const subscriptionId = String(this.subscriptionId++);
 
     this.emitUpdate({
       type: 'subscription',
@@ -112,24 +112,20 @@ export const devtool = {
   updateActor(actor: Actor<any, any>) {
     currentDevtool.updateActor(actor);
   },
-  setCurrentActor(actor: Actor<any, any>) {
-    currentDevtool.setCurrentActor(actor);
+  setCurrentSubscription(id: string) {
+    currentDevtool.setCurrentSubscription(id);
   },
-  popCurrentActor() {
-    currentDevtool.popCurrentActor();
-  },
-  getCurrentActorIds() {
-    return currentDevtool.getCurrentActorIds();
+  popCurrentSubscription() {
+    currentDevtool.popCurrentSubscription();
   },
   subscribe(cb: (event: THistoryRecord) => void) {
     return currentDevtool.subscribe(cb);
   },
-  createWrappedDispatcher(subscriptionId?: number) {
-    return (id: number, state: string, event: string, dispatch: (payload: any) => void) => {
+  createWrappedDispatcher() {
+    return (id: string, state: string, event: string, dispatch: (payload: any) => void) => {
       return (payload: any) => {
         currentDevtool.addDispatch({
           id,
-          subscriptionId,
           state,
           event,
           payload,
@@ -138,24 +134,11 @@ export const devtool = {
       };
     };
   },
-  addSubscription(
-    id: number,
-    state: string | number,
-    subscriber: TSubscriptionHandler<Actor<any, any>> | Actor<any, any>,
-  ) {
-    if (subscriber instanceof Actor) {
-      return currentDevtool.addSubscription({
-        id,
-        state,
-        // @ts-ignore
-        ref: subscriber._devtoolId!,
-      });
-    }
-
+  addSubscription(id: string, state: string | number, subscriber: TSubscriptionHandler<any, any>) {
     return currentDevtool.addSubscription({
       id,
       state,
-      ref: subscriber.name,
+      name: subscriber.name,
     });
   },
   getEventsBuffer() {

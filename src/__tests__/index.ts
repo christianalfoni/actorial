@@ -1,4 +1,4 @@
-import { actor } from '..';
+import { actor, spawn } from '..';
 
 describe('Actorial', () => {
   test('should instantiate actors', () => {
@@ -7,16 +7,17 @@ describe('Actorial', () => {
       data: undefined;
     }
 
-    const instance = actor<States, {}>({
+    const actorA = actor<States, {}>({
       state: 'foo',
       data: undefined,
       events: {
         foo: {},
       },
     });
-    expect(instance).toBeDefined();
+    expect(actorA).toBeDefined();
   });
   test('should instantiate actors with state', () => {
+    expect.assertions(1);
     type States =
       | {
           state: 'foo';
@@ -27,7 +28,7 @@ describe('Actorial', () => {
           data: undefined;
         };
 
-    const instance = actor<States, {}>({
+    const actorA = actor<States, {}>({
       state: 'foo',
       data: undefined,
       events: {
@@ -35,9 +36,13 @@ describe('Actorial', () => {
         bar: {},
       },
     });
-    expect(instance.state === 'foo').toBe(true);
+    spawn(actorA, null, (current) => {
+      expect(current.state === 'foo').toBe(true);
+    });
   });
+
   test('should instantiate actors with data', () => {
+    expect.assertions(2);
     interface States {
       state: 'foo';
       data: {
@@ -45,7 +50,7 @@ describe('Actorial', () => {
       };
     }
 
-    const instance = actor<States, {}>({
+    const actorA = actor<States, {}>({
       state: 'foo',
       data: {
         a: 'a',
@@ -54,10 +59,14 @@ describe('Actorial', () => {
         foo: {},
       },
     });
-    expect(instance.state === 'foo').toBe(true);
-    expect(instance.data.a).toBe('a');
+    spawn(actorA, null, (current) => {
+      expect(current.state === 'foo').toBe(true);
+      expect(current.data.a).toBe('a');
+    });
   });
+
   test('should instantiate actors with events', () => {
+    expect.assertions(2);
     type States =
       | {
           state: 'foo';
@@ -76,7 +85,7 @@ describe('Actorial', () => {
       changed: string;
     };
 
-    const instance = actor<States, Events>({
+    const actorA = actor<States, Events>({
       state: 'foo',
       data: {
         foo: 'bar',
@@ -88,10 +97,14 @@ describe('Actorial', () => {
         bar: {},
       },
     });
-    expect(instance.state === 'foo').toBe(true);
-    expect(instance.state === 'foo' && instance.data.foo).toBe('bar');
+    spawn(actorA, null, (current) => {
+      expect(current.state === 'foo').toBe(true);
+      expect(current.state === 'foo' && current.data.foo).toBe('bar');
+    });
   });
+
   test('should instantiate actors with a dispatcher', () => {
+    expect.assertions(1);
     type States = {
       state: 'foo';
       data: {
@@ -103,7 +116,7 @@ describe('Actorial', () => {
       changed: string;
     };
 
-    const instance = actor<States, Events>({
+    const actorA = actor<States, Events>({
       state: 'foo',
       data: {
         foo: 'bar',
@@ -114,8 +127,11 @@ describe('Actorial', () => {
         },
       },
     });
-    expect(instance.dispatch.changed).toBeDefined();
+    spawn(actorA, null, {
+      foo: (data) => expect(data.foo).toBe('bar'),
+    });
   });
+
   test('should update data on valid event', () => {
     type States = {
       state: 'foo';
@@ -128,7 +144,7 @@ describe('Actorial', () => {
       changed: string;
     };
 
-    const instance = actor<States, Events>({
+    const actorA = actor<States, Events>({
       state: 'foo',
       data: {
         foo: 'bar',
@@ -138,12 +154,19 @@ describe('Actorial', () => {
           changed: (data) => (update) => [{ ...data, foo: update }],
         },
       },
+      on: {
+        foo: (data, dispatch) => {
+          dispatch.changed('bar2');
+        },
+      },
     });
-    instance.start();
-    instance.dispatch.changed('bar2');
-    expect(instance.data.foo).toBe('bar2');
+    spawn(actorA, null, (current) => {
+      expect(current.data.foo).toBe('bar2');
+    });
   });
+
   test('should change state with valid dispatch', () => {
+    expect.assertions(1);
     type States =
       | {
           state: 'foo';
@@ -162,7 +185,7 @@ describe('Actorial', () => {
       changed: string;
     };
 
-    const instance = actor<States, Events>({
+    const actorA = actor<States, Events>({
       state: 'foo',
       data: {
         foo: 'bar',
@@ -173,13 +196,18 @@ describe('Actorial', () => {
         },
         bar: {},
       },
+      on: {
+        foo: (data, dispatch) => {
+          dispatch.changed('bar2');
+        },
+      },
     });
-    instance.start();
-    instance.dispatch.changed('bar2');
-    expect(instance.state === 'bar').toBe(true);
-    expect(instance.state === 'bar' && instance.data.foo).toBe('bar2');
+    spawn(actorA, null, {
+      bar: (data) => expect(data.foo).toBe('bar2'),
+    });
   });
   test('should ignore invalid event', () => {
+    expect.assertions(1);
     type States =
       | {
           state: 'foo';
@@ -198,7 +226,7 @@ describe('Actorial', () => {
       changed: void;
     };
 
-    const instance = actor<States, Events>({
+    const actorA = actor<States, Events>({
       state: 'foo',
       data: {
         foo: 'bar',
@@ -209,100 +237,21 @@ describe('Actorial', () => {
         },
         bar: {},
       },
-    });
-    instance.start();
-    instance.dispatch.changed();
-    expect(instance.state === 'bar' && instance.data.foo).toBe('bar!');
-    instance.dispatch.changed();
-    expect(instance.state === 'bar' && instance.data.foo).toBe('bar!');
-  });
-  test('should trigger subscriptions on state change', () => {
-    type States =
-      | {
-          state: 'foo';
-          data: {};
-        }
-      | {
-          state: 'bar';
-          data: {};
-        };
-
-    type Events = {
-      toFoo: void;
-      toBar: void;
-    };
-
-    const instance = actor<States, Events>({
-      state: 'foo',
-      data: {},
-      events: {
-        foo: {
-          toBar: (data) => () => [data, 'bar'],
+      on: {
+        foo: (data, dispatch) => {
+          dispatch.changed();
         },
-        bar: {
-          toFoo: (data) => () => [data, 'foo'],
+        bar: (data, dispatch) => {
+          dispatch.changed();
         },
       },
     });
-
-    expect.assertions(3);
-    let count = 0;
-    instance.subscribe((actor) => {
-      count++;
-      if (count === 1) {
-        expect(actor.state === 'foo').toBe(true);
-      } else if (count === 2) {
-        expect(actor.state === 'bar').toBe(true);
-      } else {
-        expect(actor.state === 'foo').toBe(true);
-      }
+    spawn(actorA, null, {
+      bar: (data) => expect(data.foo).toBe('bar!'),
     });
-    instance.start();
-    instance.dispatch.toBar();
-    instance.dispatch.toFoo();
-  });
-  test('should trigger specific subscriptions on state change', () => {
-    type States =
-      | {
-          state: 'foo';
-          data: {};
-        }
-      | {
-          state: 'bar';
-          data: {};
-        };
-
-    type Events = {
-      toFoo: void;
-      toBar: void;
-    };
-
-    const instance = actor<States, Events>({
-      state: 'foo',
-      data: {},
-      events: {
-        foo: {
-          toBar: (data) => () => [data, 'bar'],
-        },
-        bar: {
-          toFoo: (data) => () => [data, 'foo'],
-        },
-      },
-    });
-
-    expect.assertions(3);
-    // Triggers when state matches
-    instance.on('foo', (actor) => {
-      expect(actor.state === 'foo').toBe(true);
-    });
-    instance.on('bar', (actor) => {
-      expect(actor.state === 'bar').toBe(true);
-    });
-    instance.start();
-    instance.dispatch.toBar();
-    instance.dispatch.toFoo();
   });
   test('should run dispose subscriptions when state change', () => {
+    expect.assertions(1);
     type States =
       | {
           state: 'foo';
@@ -318,7 +267,7 @@ describe('Actorial', () => {
       toBar: void;
     };
 
-    const instance = actor<States, Events>({
+    const actorA = actor<States, Events>({
       state: 'foo',
       data: {},
       events: {
@@ -329,30 +278,21 @@ describe('Actorial', () => {
           toFoo: (data) => () => [data, 'foo'],
         },
       },
+      on: {
+        foo: (data, dispatch) => {
+          setTimeout(() => dispatch.toBar());
+          return () => expect(true).toBe(true);
+        },
+      },
     });
-
-    expect.assertions(3);
-    let subscriptionCount = 0;
-    instance.subscribe((actor) => {
-      return () => {
-        subscriptionCount++;
-        if (subscriptionCount === 1) {
-          expect(actor.state === 'foo').toBe(true);
-        } else {
-          expect(actor.state === 'bar').toBe(true);
-        }
-      };
+    return new Promise((resolve) => {
+      spawn(actorA, null, {
+        bar: resolve,
+      });
     });
-    instance.on('bar', (actor) => {
-      return () => {
-        expect(actor.state === 'bar').toBe(true);
-      };
-    });
-    instance.start();
-    instance.dispatch.toBar();
-    instance.dispatch.toFoo();
   });
-  test('should be able to dispose a subscription', () => {
+  test('should be able to dispose an instance', () => {
+    expect.assertions(0);
     type States =
       | {
           state: 'foo';
@@ -368,7 +308,8 @@ describe('Actorial', () => {
       toBar: void;
     };
 
-    const instance = actor<States, Events>({
+    let dispose: () => void;
+    const actorA = actor<States, Events>({
       state: 'foo',
       data: {},
       events: {
@@ -379,21 +320,20 @@ describe('Actorial', () => {
           toFoo: (data) => () => [data, 'foo'],
         },
       },
+      on: {
+        foo: (data, dispatch) => {
+          setTimeout(() => {
+            dispose();
+            dispatch.toBar();
+          });
+        },
+        bar: () => {
+          expect(true).toBe(true);
+        },
+      },
     });
 
-    expect.assertions(2);
-    let count = 0;
-    const dispose = instance.subscribe((actor) => {
-      count++;
-      if (count === 1) {
-        expect(actor.state === 'foo').toBe(true);
-      } else {
-        expect(actor.state === 'bar').toBe(true);
-      }
-    });
-    instance.start();
-    instance.dispatch.toBar();
-    dispose();
-    instance.dispatch.toFoo();
+    dispose = spawn(actorA);
+    return new Promise((resolve) => setTimeout(resolve));
   });
 });
